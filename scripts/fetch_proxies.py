@@ -1,7 +1,7 @@
-"""Fetch SOCKS5 proxy lists from ProxyScrape and format them.
+"""Fetch proxy lists (SOCKS5, SOCKS4, HTTP, HTTPS, etc.) from ProxyScrape and format them.
 
-File format: socks5://xxx:yyy#COUNTRY_CODE-SOCKS5-Number
-File naming: COUNTRY_CODE-SOCKS5.txt
+File format: {protocol}://xxx:yyy#{COUNTRY_CODE}-{PROTOCOL}-{Number}
+File naming: {COUNTRY_CODE}-{PROTOCOL}.txt (e.g. US-SOCKS5.txt, US-HTTP.txt)
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Final, List, Optional, Pattern
+from typing import Final, List, Optional, Pattern, Set
 
 # Configure logging
 logging.basicConfig(
@@ -36,6 +36,8 @@ DEFAULT_TIMEOUT: Final[int] = 15
 MAX_RETRIES: Final[int] = 3
 RETRY_DELAY: Final[float] = 2.0
 
+SUPPORTED_PROTOCOLS: Final[Set[str]] = {"socks5", "socks4", "http", "https"}
+
 
 def normalize_country_code(code: str) -> str:
     """Normalize country code string to trimmed uppercase.
@@ -47,6 +49,19 @@ def normalize_country_code(code: str) -> str:
         Cleaned uppercase country code (e.g. "US", "ALL").
     """
     return code.strip().upper()
+
+
+def normalize_protocol(protocol: str) -> str:
+    """Normalize and validate proxy protocol string.
+
+    Args:
+        protocol: Raw protocol string (e.g. "SOCKS5", " socks4 ", "http").
+
+    Returns:
+        Cleaned lowercase protocol string.
+    """
+    clean_proto = protocol.strip().lower()
+    return clean_proto
 
 
 def parse_proxy_line(raw_line: str) -> Optional[str]:
@@ -66,7 +81,7 @@ def parse_proxy_line(raw_line: str) -> Optional[str]:
     if "://" in line:
         line = line.split("://", 1)[1]
 
-    # Strip any trailing credentials or path
+    # Strip any credentials or URL path
     line = line.split("@")[-1].split("/")[0].strip()
 
     match = HOST_PORT_PATTERN.match(line)
@@ -79,41 +94,49 @@ def parse_proxy_line(raw_line: str) -> Optional[str]:
     return None
 
 
-def build_proxyscrape_url(country: str, token: Optional[str] = None) -> str:
+def build_proxyscrape_url(
+    country: str,
+    protocol: str = "socks5",
+    token: Optional[str] = None,
+) -> str:
     """Build the ProxyScrape API request URL.
 
     Args:
         country: Country code (e.g. 'US' or 'ALL').
+        protocol: Proxy protocol (e.g. 'socks5', 'socks4', 'http', 'https').
         token: Optional ProxyScrape API token.
 
     Returns:
         Full API request URL with query parameters.
     """
     country_param = country.lower()
+    proto_param = protocol.lower()
+
     params = {
         "request": "display_proxies",
-        "protocol": "socks5",
+        "protocol": proto_param,
         "country": country_param,
         "format": "text",
     }
     if token:
-        # Include serialkey parameter for token support in query
         params["serialkey"] = token
 
     query_string = urllib.parse.urlencode(params)
     return f"{DEFAULT_BASE_URL}?{query_string}"
 
 
-def fetch_proxies_for_country(
+def fetch_proxies_for_target(
     country: str,
+    protocol: str = "socks5",
     token: Optional[str] = None,
     max_retries: int = MAX_RETRIES,
     timeout: int = DEFAULT_TIMEOUT,
 ) -> List[str]:
-    """Fetch raw proxy list for a given country with automatic retry.
+    """Fetch raw proxy list for a given country and protocol with automatic retry.
 
     Args:
         country: Target country code (e.g. 'US').
+        protocol: Proxy protocol ('socks5', 'socks4', 'http', 'https').
         token: Optional API token.
         max_retries: Number of retry attempts on failure.
         timeout: Network request timeout in seconds.
@@ -121,15 +144,19 @@ def fetch_proxies_for_country(
     Returns:
         List of validated host:port strings.
     """
-    url = build_proxyscrape_url(country, token)
+    url = build_proxyscrape_url(country, protocol=protocol, token=token)
     headers = {
-        "User-Agent": "Mozilla/5.0 (compatible; ProxyScrapeFetcher/1.0)",
+        "User-Agent": "Mozilla/5.0 (compatible; ProxyScrapeFetcher/2.0)",
         "Accept": "text/plain,*/*",
     }
     if token:
         headers["api-token"] = token
 
-    logger.info("Fetching SOCKS5 proxies for country [%s] from ProxyScrape...", country)
+    logger.info(
+        "Fetching [%s] proxies for country [%s] from ProxyScrape...",
+        protocol.upper(),
+        country,
+    )
 
     for attempt in range(1, max_retries + 1):
         try:
@@ -137,10 +164,11 @@ def fetch_proxies_for_country(
             with urllib.request.urlopen(req, timeout=timeout) as response:
                 if response.status != 200:
                     logger.warning(
-                        "Attempt %d/%d: Received HTTP %d for country [%s]",
+                        "Attempt %d/%d: Received HTTP %d for [%s / %s]",
                         attempt,
                         max_retries,
                         response.status,
+                        protocol.upper(),
                         country,
                     )
                     time.sleep(RETRY_DELAY)
@@ -158,17 +186,19 @@ def fetch_proxies_for_country(
                         proxies.append(parsed)
 
                 logger.info(
-                    "Successfully fetched %d valid proxies for country [%s]",
+                    "Successfully fetched %d valid [%s] proxies for country [%s]",
                     len(proxies),
+                    protocol.upper(),
                     country,
                 )
                 return proxies
 
         except urllib.error.URLError as err:
             logger.warning(
-                "Attempt %d/%d failed for country [%s]: %s",
+                "Attempt %d/%d failed for [%s / %s]: %s",
                 attempt,
                 max_retries,
+                protocol.upper(),
                 country,
                 err,
             )
@@ -176,37 +206,54 @@ def fetch_proxies_for_country(
                 time.sleep(RETRY_DELAY)
         except Exception as err:
             logger.error(
-                "Unexpected error fetching proxies for [%s]: %s", country, err
+                "Unexpected error fetching proxies for [%s / %s]: %s",
+                protocol.upper(),
+                country,
+                err,
             )
             break
 
-    logger.error("Failed to fetch proxies for country [%s] after %d attempts", country, max_retries)
+    logger.error(
+        "Failed to fetch proxies for [%s / %s] after %d attempts",
+        protocol.upper(),
+        country,
+        max_retries,
+    )
     return []
 
 
-def format_proxy_lines(country: str, proxies: List[str]) -> List[str]:
+def format_proxy_lines(country: str, protocol: str, proxies: List[str]) -> List[str]:
     """Format proxy entries to the target format:
-    `socks5://xxx:yyy#COUNTRY_CODE-SOCKS5-Number`
+    `{protocol}://xxx:yyy#{COUNTRY_CODE}-{PROTOCOL}-{Number}`
 
     Args:
         country: Normalized uppercase country code.
+        protocol: Proxy protocol name (e.g. 'socks5', 'http').
         proxies: List of host:port strings.
 
     Returns:
         Formatted proxy lines.
     """
+    proto_lower = protocol.lower()
+    proto_upper = protocol.upper()
     formatted: List[str] = []
     for idx, proxy in enumerate(proxies, start=1):
-        line = f"socks5://{proxy}#{country}-SOCKS5-{idx}"
+        line = f"{proto_lower}://{proxy}#{country}-{proto_upper}-{idx}"
         formatted.append(line)
     return formatted
 
 
-def save_proxy_file(country: str, lines: List[str], output_dir: Path) -> Path:
-    """Save formatted proxy lines to {COUNTRY_CODE}-SOCKS5.txt.
+def save_proxy_file(
+    country: str,
+    protocol: str,
+    lines: List[str],
+    output_dir: Path,
+) -> Path:
+    """Save formatted proxy lines to {COUNTRY_CODE}-{PROTOCOL}.txt.
 
     Args:
         country: Normalized uppercase country code.
+        protocol: Proxy protocol name.
         lines: Formatted proxy lines.
         output_dir: Directory where the file should be saved.
 
@@ -214,7 +261,7 @@ def save_proxy_file(country: str, lines: List[str], output_dir: Path) -> Path:
         Path to the saved file.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
-    filename = f"{country}-SOCKS5.txt"
+    filename = f"{country}-{protocol.upper()}.txt"
     filepath = output_dir / filename
 
     content = "\n".join(lines) + ("\n" if lines else "")
@@ -226,13 +273,19 @@ def save_proxy_file(country: str, lines: List[str], output_dir: Path) -> Path:
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Fetch SOCKS5 proxies from ProxyScrape by country."
+        description="Fetch proxy lists (SOCKS5, SOCKS4, HTTP, HTTPS) from ProxyScrape."
     )
     parser.add_argument(
         "--countries",
         type=str,
         default=os.getenv("COUNTRIES", "US,DE,GB,FR,JP,HK,SG"),
         help="Comma-separated country codes (e.g. 'US,DE,JP' or 'ALL')",
+    )
+    parser.add_argument(
+        "--protocols",
+        type=str,
+        default=os.getenv("PROTOCOLS", "socks5"),
+        help="Comma-separated protocols (e.g. 'socks5', 'socks5,socks4,http,https')",
     )
     parser.add_argument(
         "--token",
@@ -254,6 +307,7 @@ def main() -> int:
     """Main CLI entrypoint."""
     args = parse_args()
     raw_countries: str = args.countries
+    raw_protocols: str = args.protocols
     token: Optional[str] = args.token.strip() if args.token else None
     output_dir = Path(args.output_dir)
 
@@ -262,34 +316,48 @@ def main() -> int:
         for c in raw_countries.split(",")
         if c.strip()
     ]
+    protocol_list = [
+        normalize_protocol(p)
+        for p in raw_protocols.split(",")
+        if p.strip()
+    ]
 
     if not country_list:
         logger.error("No valid country codes specified.")
         return 1
 
+    if not protocol_list:
+        logger.error("No valid protocols specified.")
+        return 1
+
     logger.info("Processing countries: %s", ", ".join(country_list))
+    logger.info("Processing protocols: %s", ", ".join(protocol_list))
     if token:
         logger.info("ProxyScrape token detected (length: %d).", len(token))
     else:
         logger.info("No ProxyScrape token provided; using public endpoint.")
 
     total_proxies = 0
-    success_count = 0
+    total_files = 0
 
-    for country in country_list:
-        proxies = fetch_proxies_for_country(country, token=token)
-        if proxies:
-            formatted_lines = format_proxy_lines(country, proxies)
-            save_proxy_file(country, formatted_lines, output_dir)
-            total_proxies += len(proxies)
-            success_count += 1
-        else:
-            logger.warning("No proxies found for [%s], skipping file write.", country)
+    for protocol in protocol_list:
+        for country in country_list:
+            proxies = fetch_proxies_for_target(country, protocol=protocol, token=token)
+            if proxies:
+                formatted_lines = format_proxy_lines(country, protocol, proxies)
+                save_proxy_file(country, protocol, formatted_lines, output_dir)
+                total_proxies += len(proxies)
+                total_files += 1
+            else:
+                logger.warning(
+                    "No proxies found for [%s / %s], skipping file write.",
+                    protocol.upper(),
+                    country,
+                )
 
     logger.info(
-        "Finished: %d/%d countries succeeded, %d total proxies collected.",
-        success_count,
-        len(country_list),
+        "Finished: generated %d proxy files with %d total proxies.",
+        total_files,
         total_proxies,
     )
     return 0

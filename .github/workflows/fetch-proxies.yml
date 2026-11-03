@@ -1,17 +1,22 @@
-name: "Fetch SOCKS5 Proxies"
+name: "Fetch Proxies"
 
 on:
   # 定时触发：每 6 小时自动执行一次 (UTC 时间 0:00, 6:00, 12:00, 18:00)
   schedule:
-    - cron: "0 */6 * * *"
+    - cron: "07 */6 * * *"
 
-  # 手动触发：可在 GitHub Actions 页面直接点击 Run workflow，并支持自定义国家代码
+  # 手动触发：可在 GitHub Actions 页面直接点击 Run workflow，支持指定国家与协议
   workflow_dispatch:
     inputs:
       countries:
         description: "国家代码列表 (以逗号分隔，如 US,DE,FR,JP 或 ALL)"
         required: false
-        default: "US,CN,HK,JP"
+        default: "US,CN,JP,HK,SG"
+        type: string
+      protocols:
+        description: "代理协议列表 (以逗号分隔，如 socks5,socks4,http,https)"
+        required: false
+        default: "socks5"
         type: string
 
 permissions:
@@ -19,12 +24,13 @@ permissions:
 
 jobs:
   fetch:
-    name: "Fetch & Format SOCKS5 Proxies"
+    name: "Fetch & Format Proxies"
     runs-on: ubuntu-latest
 
-    # 默认国家配置列表（可在下方直接修改）
+    # 默认国家与协议配置（可在下方直接修改）
     env:
-      DEFAULT_COUNTRIES: "US,CN,HK,JP"
+      DEFAULT_COUNTRIES: "US,CN,JP,HK,SG"
+      DEFAULT_PROTOCOLS: "socks5" # 可修改为 "socks5,socks4,http,https" 等
 
     steps:
       - name: "Checkout Repository"
@@ -39,14 +45,17 @@ jobs:
 
       - name: "Run Fetch Proxies Script"
         env:
-          # 若手动触发则使用输入值，否则使用默认配置
           COUNTRIES: ${{ inputs.countries || env.DEFAULT_COUNTRIES }}
+          PROTOCOLS: ${{ inputs.protocols || env.DEFAULT_PROTOCOLS }}
           # TODO: [HUMAN] 在 GitHub 仓库 Settings -> Secrets and variables -> Actions 中配置 PROXYSCRAPE_TOKEN（可选）
           PROXYSCRAPE_TOKEN: ${{ secrets.PROXYSCRAPE_TOKEN }}
           OUTPUT_DIR: "proxies"
         run: |
-          echo "Fetching proxies for countries: $COUNTRIES"
-          python scripts/fetch_proxies.py --countries "$COUNTRIES" --output-dir "$OUTPUT_DIR"
+          echo "Fetching proxies for countries: $COUNTRIES with protocols: $PROTOCOLS"
+          python scripts/fetch_proxies.py \
+            --countries "$COUNTRIES" \
+            --protocols "$PROTOCOLS" \
+            --output-dir "$OUTPUT_DIR"
 
       - name: "Commit and Push Updated Proxy Files"
         run: |
@@ -59,14 +68,14 @@ jobs:
             echo "No proxy changes detected. Skipping git commit."
           else
             echo "Changes detected in proxies. Committing and pushing..."
-            git commit -m "chore(proxies): auto-update SOCKS5 proxy lists [skip ci]"
+            git commit -m "chore(proxies): auto-update proxy lists [skip ci]"
             git push
           fi
 
       - name: "Upload Proxy Files as Artifact"
         uses: actions/upload-artifact@v4
         with:
-          name: socks5-proxy-lists
-          path: proxies/*SOCKS5.txt
+          name: proxy-lists
+          path: proxies/*.txt
           retention-days: 7
           if-no-files-found: warn

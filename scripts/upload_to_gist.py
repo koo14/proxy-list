@@ -65,12 +65,16 @@ def extract_gist_id(gist_input: str) -> str:
     raise ValueError(f"Could not parse a valid Gist ID from input: '{gist_input}'")
 
 
-def find_socks5_files(directories: List[Path], keyword: str = "socks5") -> List[Path]:
-    """Find all proxy files containing the specified keyword (case-insensitive).
+def find_proxy_files(
+    directories: List[Path],
+    keywords: Optional[List[str]] = None,
+) -> List[Path]:
+    """Find all proxy files matching any of the specified keywords (case-insensitive).
 
     Args:
         directories: List of directories to search in.
-        keyword: Keyword to match in filenames (default: 'socks5').
+        keywords: Optional list of keywords to match in filenames
+                  (default matches socks5, socks4, http, https, or any .txt proxy file).
 
     Returns:
         Sorted list of matching Path objects.
@@ -78,18 +82,37 @@ def find_socks5_files(directories: List[Path], keyword: str = "socks5") -> List[
     matched_files: List[Path] = []
     seen_basenames: set[str] = set()
 
-    lowered_kw = keyword.lower()
+    lowered_kws = [k.strip().lower() for k in keywords if k.strip()] if keywords else []
+
     for directory in directories:
         if not directory.exists() or not directory.is_dir():
             continue
         for file_path in directory.iterdir():
-            if file_path.is_file() and lowered_kw in file_path.name.lower():
+            if not file_path.is_file():
+                continue
+            name_lower = file_path.name.lower()
+            if not name_lower.endswith(".txt"):
+                continue
+
+            # If keywords specified, check if any keyword is present
+            if lowered_kws:
+                if any(kw in name_lower for kw in lowered_kws):
+                    if file_path.name not in seen_basenames:
+                        seen_basenames.add(file_path.name)
+                        matched_files.append(file_path)
+            else:
+                # Include any non-empty txt proxy file
                 if file_path.name not in seen_basenames:
                     seen_basenames.add(file_path.name)
                     matched_files.append(file_path)
 
     matched_files.sort(key=lambda p: p.name)
     return matched_files
+
+
+def find_socks5_files(directories: List[Path], keyword: str = "socks5") -> List[Path]:
+    """Backward-compatible wrapper for finding files with a single keyword."""
+    return find_proxy_files(directories, keywords=[keyword])
 
 
 def prepare_gist_payload(file_paths: List[Path], description: Optional[str] = None) -> Dict[str, Any]:
@@ -198,10 +221,16 @@ def parse_args() -> argparse.Namespace:
         help="Directory to scan for proxy files (can specify multiple, defaults to ['proxies', '.'])",
     )
     parser.add_argument(
+        "--keywords",
+        type=str,
+        default=os.getenv("PROXY_KEYWORDS", "socks5,socks4,http,https"),
+        help="Comma-separated keywords to filter proxy filenames (default: 'socks5,socks4,http,https')",
+    )
+    parser.add_argument(
         "--keyword",
         type=str,
-        default="socks5",
-        help="Filename filter keyword (case-insensitive, default: 'socks5')",
+        default="",
+        help="Single keyword filter (legacy/backward compatibility)",
     )
     return parser.parse_args()
 
@@ -236,9 +265,16 @@ def main() -> int:
     raw_dirs = args.dir if args.dir else ["proxies", "."]
     search_dirs = [Path(d) for d in raw_dirs]
 
-    files = find_socks5_files(search_dirs, keyword=args.keyword)
+    # Combine keywords
+    keywords_list: List[str] = []
+    if args.keyword:
+        keywords_list.append(args.keyword)
+    if args.keywords:
+        keywords_list.extend([k.strip() for k in args.keywords.split(",") if k.strip()])
+
+    files = find_proxy_files(search_dirs, keywords=keywords_list if keywords_list else None)
     if not files:
-        logger.error("No files containing '%s' found in %s", args.keyword, raw_dirs)
+        logger.error("No matching proxy files found in %s with keywords %s", raw_dirs, keywords_list)
         return 1
 
     logger.info("Found %d proxy files to upload:", len(files))
@@ -247,7 +283,7 @@ def main() -> int:
 
     payload = prepare_gist_payload(
         files,
-        description="Automated SOCKS5 Proxy List (Updated by GitHub Actions)",
+        description="Automated Proxy Lists (Updated by GitHub Actions)",
     )
 
     logger.info("Uploading to Gist https://gist.github.com/%s ...", gist_id)
