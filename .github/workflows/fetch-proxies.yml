@@ -11,7 +11,7 @@ on:
       countries:
         description: "国家代码列表 (以逗号分隔，如 US,DE,FR,JP 或 ALL)"
         required: false
-        default: "US,HK,JP,CN"
+        default: "US,CN,HK,JP"
         type: string
 
 permissions:
@@ -24,7 +24,7 @@ jobs:
 
     # 默认国家配置列表（可在下方直接修改）
     env:
-      DEFAULT_COUNTRIES: "US,HK,JP,CN"
+      DEFAULT_COUNTRIES: "US,CN,HK,JP"
 
     steps:
       - name: "Checkout Repository"
