@@ -51,9 +51,9 @@ class TestFetchProxies(unittest.TestCase):
         proxies = ["1.1.1.1:1080", "2.2.2.2:1080", "3.3.3.3:1080"]
         formatted = format_proxy_lines("US", proxies)
         expected = [
-            "socks5://1.1.1.1:1080 #US-SOCKS5-1",
-            "socks5://2.2.2.2:1080 #US-SOCKS5-2",
-            "socks5://3.3.3.3:1080 #US-SOCKS5-3",
+            "socks5://1.1.1.1:1080#US-SOCKS5-1",
+            "socks5://2.2.2.2:1080#US-SOCKS5-2",
+            "socks5://3.3.3.3:1080#US-SOCKS5-3",
         ]
         self.assertEqual(formatted, expected)
 
@@ -61,16 +61,16 @@ class TestFetchProxies(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             out_path = Path(tmp_dir)
             lines = [
-                "socks5://1.1.1.1:1080 #HK-SOCKS5-1",
-                "socks5://2.2.2.2:1080 #HK-SOCKS5-2",
+                "socks5://1.1.1.1:1080#HK-SOCKS5-1",
+                "socks5://2.2.2.2:1080#HK-SOCKS5-2",
             ]
             saved_file = save_proxy_file("HK", lines, out_path)
             self.assertEqual(saved_file.name, "HK-SOCKS5.txt")
             self.assertTrue(saved_file.exists())
 
             content = saved_file.read_text(encoding="utf-8")
-            self.assertIn("socks5://1.1.1.1:1080 #HK-SOCKS5-1", content)
-            self.assertIn("socks5://2.2.2.2:1080 #HK-SOCKS5-2", content)
+            self.assertIn("socks5://1.1.1.1:1080#HK-SOCKS5-1", content)
+            self.assertIn("socks5://2.2.2.2:1080#HK-SOCKS5-2", content)
 
 
 if __name__ == "__main__":

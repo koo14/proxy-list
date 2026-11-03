@@ -27,7 +27,7 @@
 1. **多国家支持**：在 Action 配置文件或手动触发时轻松指定国家代码（如 `US,DE,GB,FR,JP,HK,SG` 或 `ALL`）。
 2. **标准命名与格式**：
    - 文件名：`COUNTRY_CODE-SOCKS5.txt`（如 `US-SOCKS5.txt`、`DE-SOCKS5.txt`）。
-   - 内容格式：`socks5://xxx:yyy #COUNTRY_CODE-SOCKS5-Number`。
+   - 内容格式：`socks5://xxx:yyy#COUNTRY_CODE-SOCKS5-Number`。
 3. **ProxyScrape Token 支持**：支持传入 ProxyScrape API Token/Key，未配置时自动回退到公开接口。
 4. **两套独立 GitHub Actions**：
    - **Action 1 (Fetch)**：定时或手动抓取并提交到仓库 `proxies/` 目录。
@@ -49,13 +49,13 @@ proxies/
 
 ### 2. 单行格式
 ```text
-socks5://<ip>:<port> #<COUNTRY_CODE>-SOCKS5-<INDEX>
+socks5://<ip>:<port>#<COUNTRY_CODE>-SOCKS5-<INDEX>
 ```
 示例 (`US-SOCKS5.txt`):
 ```text
-socks5://45.61.129.165:9050 #US-SOCKS5-1
-socks5://184.170.249.65:4145 #US-SOCKS5-2
-socks5://216.68.128.121:4145 #US-SOCKS5-3
+socks5://45.61.129.165:9050#US-SOCKS5-1
+socks5://184.170.249.65:4145#US-SOCKS5-2
+socks5://216.68.128.121:4145#US-SOCKS5-3
 ```
 
 ---

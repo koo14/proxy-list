@@ -52,14 +52,14 @@ class TestUploadToGist(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             dir_path = Path(tmp_dir)
             f1 = dir_path / "US-SOCKS5.txt"
-            f1.write_text("socks5://1.2.3.4:1080 #US-SOCKS5-1\n", encoding="utf-8")
+            f1.write_text("socks5://1.2.3.4:1080#US-SOCKS5-1\n", encoding="utf-8")
 
             payload = prepare_gist_payload([f1], description="Test description")
             self.assertEqual(payload["description"], "Test description")
             self.assertIn("US-SOCKS5.txt", payload["files"])
             self.assertEqual(
                 payload["files"]["US-SOCKS5.txt"]["content"],
-                "socks5://1.2.3.4:1080 #US-SOCKS5-1\n",
+                "socks5://1.2.3.4:1080#US-SOCKS5-1\n",
             )
 
 

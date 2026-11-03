@@ -1,6 +1,6 @@
 """Fetch SOCKS5 proxy lists from ProxyScrape and format them.
 
-File format: socks5://xxx:yyy #COUNTRY_CODE-SOCKS5-Number
+File format: socks5://xxx:yyy#COUNTRY_CODE-SOCKS5-Number
 File naming: COUNTRY_CODE-SOCKS5.txt
 """
 
@@ -186,7 +186,7 @@ def fetch_proxies_for_country(
 
 def format_proxy_lines(country: str, proxies: List[str]) -> List[str]:
     """Format proxy entries to the target format:
-    `socks5://xxx:yyy #COUNTRY_CODE-SOCKS5-Number`
+    `socks5://xxx:yyy#COUNTRY_CODE-SOCKS5-Number`
 
     Args:
         country: Normalized uppercase country code.
@@ -197,7 +197,7 @@ def format_proxy_lines(country: str, proxies: List[str]) -> List[str]:
     """
     formatted: List[str] = []
     for idx, proxy in enumerate(proxies, start=1):
-        line = f"socks5://{proxy} #{country}-SOCKS5-{idx}"
+        line = f"socks5://{proxy}#{country}-SOCKS5-{idx}"
         formatted.append(line)
     return formatted
 
