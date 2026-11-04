@@ -1,9 +1,9 @@
 name: "Upload Proxies to Gist"
 
 on:
-  # 定时触发：每 6 小时自动执行一次 (UTC 时间 0:15, 6:15, 12:15, 18:15)
+  # 定时触发：每小时自动执行一次
   schedule:
-    - cron: "15 */6 * * *"
+    - cron: "15 * * * *"
 
   # 联动触发：在 Fetch 动作成功执行后自动触发上传
   workflow_run:
