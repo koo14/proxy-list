@@ -3,7 +3,7 @@ name: "Fetch Proxies"
 on:
   # 定时触发：每小时自动执行一次
   schedule:
-    - cron: "07 * * * *"
+    - cron: "7 * * * *"
 
   # 手动触发：可在 GitHub Actions 页面直接点击 Run workflow，支持指定国家与协议
   workflow_dispatch:
